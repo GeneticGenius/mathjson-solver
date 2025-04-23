@@ -1,5 +1,5 @@
 import numbers
-from typing import Union
+from typing import Union, Any
 from functools import reduce
 import math
 from copy import deepcopy
@@ -7,6 +7,8 @@ from statistics import median
 import logging
 import traceback
 import datetime
+
+NoneType = type(None)
 
 
 class MathJSONException(Exception):
@@ -26,23 +28,25 @@ class MathJSONException(Exception):
         return f"Problem in {self.construct}. {self.expr}. {m}"
 
 
-def requires_array(func):
-    def inner1(*args, **kwargs):
-        try:
-            if args[0][1][0] == "Array" and len(args[0][1]) > 0:
-                return func(*args, **kwargs)
-            else:
-                raise ValueError(f"'{func.__name__}' should receive a list")
-        except TypeError:
-            raise ValueError(f"'{func.__name__}' really should receive a list")
+# def requires_array(func):
+#     def inner1(*args, **kwargs):
+#         try:
+#             if args[0][1][0] == "Array" and len(args[0][1]) > 0:
+#                 return func(*args, **kwargs)
+#             else:
+#                 raise ValueError(f"'{func.__name__}' should receive a list")
+#         except TypeError:
+#             raise ValueError(f"'{func.__name__}' really should receive a list")
 
-    return inner1
+#     return inner1
 
 
 def is_numeric(x):
     try:
         float(x)
     except ValueError:
+        return False
+    except TypeError:
         return False
     else:
         return True
@@ -92,40 +96,61 @@ def has_matching_sublist(
         return count >= required_match_count
 
 
-def has_sublist2(
-    *,
-    my_list: list,
-    required_match_count: int,
-    position: int,
-    contiguous: bool,
-    condition: callable,
-) -> bool:
-    if contiguous:
-        # Check for contiguous matches based on position
-        if position == 0:
-            # Check if the beginning of the list matches
-            count = sum(1 for x in my_list[:required_match_count] if condition(x))
-            return count == required_match_count
-        elif position > 0:
-            # Skip the first `position` elements
-            count = sum(
-                1
-                for x in my_list[position : position + required_match_count]
-                if condition(x)
-            )
-            return count == required_match_count
-        elif position == -1:
-            # Check if the end of the list matches
-            count = sum(1 for x in my_list[-required_match_count:] if condition(x))
-            return count == required_match_count
-        elif position < -1:
-            # Skip the last `abs(position)` elements
-            count = sum(1 for x in my_list[:position] if condition(x))
-            return count == required_match_count
-    else:
-        # Check for non-contiguous matches
-        count = sum(1 for x in my_list if condition(x))
-        return count >= required_match_count
+# def has_sublist2(
+#     *,
+#     my_list: list,
+#     required_match_count: int,
+#     position: int,
+#     contiguous: bool,
+#     condition: callable,
+# ) -> bool:
+#     if contiguous:
+#         # Check for contiguous matches based on position
+#         if position == 0:
+#             # Check if the beginning of the list matches
+#             count = sum(1 for x in my_list[:required_match_count] if condition(x))
+#             return count == required_match_count
+#         elif position > 0:
+#             # Skip the first `position` elements
+#             count = sum(
+#                 1
+#                 for x in my_list[position : position + required_match_count]
+#                 if condition(x)
+#             )
+#             return count == required_match_count
+#         elif position == -1:
+#             # Check if the end of the list matches
+#             count = sum(1 for x in my_list[-required_match_count:] if condition(x))
+#             return count == required_match_count
+#         elif position < -1:
+#             # Skip the last `abs(position)` elements
+#             count = sum(1 for x in my_list[:position] if condition(x))
+#             return count == required_match_count
+#     else:
+#         # Check for non-contiguous matches
+#         count = sum(1 for x in my_list if condition(x))
+#         return count >= required_match_count
+
+
+def comparison_safe_converter(x):
+    if type(x) in [int, float, str]:
+        return f"{x}"
+    elif type(x) in [bool, NoneType]:
+        if x:
+            return True
+        else:
+            return False
+    return x
+
+
+def comparison_safe_converter_for_pairs(
+    v1, v2
+) -> (Union[str, float], Union[str, float]):
+    if is_numeric(v1):
+        v1 = float(v1)
+    if is_numeric(v2):
+        v2 = float(v2)
+    return v1, v2
 
 
 def create_mathjson_solver(solver_parameters):
@@ -147,10 +172,15 @@ def create_mathjson_solver(solver_parameters):
                 tmp = 0
                 for i, x in enumerate(s[1:]):
                     res = f(x, c)
-                    if i ==0:
+                    if is_numeric(res):
+                        res = float(res)
+                    if i == 0:
                         tmp = res
                     else:
-                        tmp = tmp + res
+                        try:
+                            tmp = tmp + res
+                        except TypeError:
+                            pass
 
                     # if isinstance(res, list):
                     #     l_res.append(sum([xx for xx in res[1:]]))
@@ -167,24 +197,32 @@ def create_mathjson_solver(solver_parameters):
                 #         tmp = tmp + x
                 # return tmp
 
+            # def Sum(s):
+            #     l_res = []
+            #     for x in s[1:]:
+            #         res = f(x, c)
+            #         if isinstance(res, list):
+            #             l_res.append(sum([xx for xx in res[1:]]))
+            #         else:
+            #             l_res.append(res)
+            #     return sum(l_res)
+
             def Sum(s):
-                l_res = []
+                l_res = ["Array"]
                 for x in s[1:]:
                     res = f(x, c)
                     if isinstance(res, list):
-                        l_res.append(sum([xx for xx in res[1:]]))
+                        l_res.append(Add(["Array"] + [xx for xx in res[1:]]))
                     else:
                         l_res.append(res)
-                return sum(l_res)
+                return Add(l_res)
 
-            # @requires_array
             def Max(s):
                 if isinstance(s[1], str):
                     return max([f(x, c) for x in f(s[1], c) if is_numeric(f(x, c))])
                 else:
                     return max([f(x, c) for x in s[1][1:] if is_numeric(f(x, c))])
 
-            # @requires_array
             def Min(s):
                 if isinstance(s[1], str):
                     return min([f(x, c) for x in f(s[1], c) if is_numeric(f(x, c))])
@@ -203,26 +241,21 @@ def create_mathjson_solver(solver_parameters):
                 except ZeroDivisionError:
                     return None
 
-            # @requires_array
             def Median(s):
                 if isinstance(s[1], str):
                     return median([f(x, c) for x in f(s[1], c) if is_numeric(f(x, c))])
                 else:
                     return median([f(x, c) for x in s[1][1:] if is_numeric(f(x, c))])
 
-            # @requires_array
             def Length(s):
                 if isinstance(s[1], str):
-
                     return len([x for x in f(s[1], c)][1:])
                 else:
                     return len([x for x in s[1][1:]])
 
-            # @requires_array
             def Any(s):
                 return any([f(x, c) for x in s[1][1:]])
 
-            # @requires_array
             def All(s):
                 return all([f(x, c) for x in s[1][1:]])
 
@@ -246,6 +279,20 @@ def create_mathjson_solver(solver_parameters):
                     if len(x) != 2:
                         raise ValueError(
                             "Case of 'Switch' should have exactly two parameters"
+                        )
+                    if comparison_safe_converter(
+                        expression
+                    ) == comparison_safe_converter(f(x[0], c)):
+                        return f(x[1], c)
+                else:
+                    return f(s[2], c)
+
+            def StrictSwitch(s):
+                expression = f(s[1], c)
+                for x in s[3:]:
+                    if len(x) != 2:
+                        raise ValueError(
+                            "Case of 'StrictSwitch' should have exactly two parameters"
                         )
                     if expression == f(x[0], c):
                         return f(x[1], c)
@@ -340,9 +387,43 @@ def create_mathjson_solver(solver_parameters):
                 if isinstance(z, list):
                     retlist = ["Array"]
                     for x in z[1:]:
+                        try:
+                            the_function_name = s[2][0]
+                            ss = [the_function_name, x] + s[3:]
+                            retlist.append(f(ss, c))
+                        except MathJSONException:
+                            retlist.append(x)
+                    return retlist
+
+            def StrictMap(s):
+                """
+                ["Map", list, function, more parameters]
+                The `function` must accept at least one parameter. That is for the current loop element.
+                The `more parameters` are for any additional parameters that function might have.
+                """
+                z = f(s[1], c)
+                if isinstance(z, list):
+                    retlist = ["Array"]
+                    for x in z[1:]:
                         the_function_name = s[2][0]
                         ss = [the_function_name, x] + s[3:]
                         retlist.append(f(ss, c))
+                    return retlist
+
+            def Filter(s):
+                """
+                ["Filter", list, function, more parameters]
+                The `function` must accept at least one parameter. That is for the current loop element.
+                The `more parameters` are for any additional parameters that function might have.
+                """
+                z = f(s[1], c)
+                if isinstance(z, list):
+                    retlist = ["Array"]
+                    for x in z[1:]:
+                        the_function_name = s[2][0]
+                        ss = [the_function_name, x] + s[3:]
+                        if f(ss, c):
+                            retlist.append(x)
                     return retlist
 
             def HasMatchingSublist(s):
@@ -397,6 +478,54 @@ def create_mathjson_solver(solver_parameters):
             def TimeDeltaWeeks(s):
                 return datetime.timedelta(weeks=f(s[1], c))
 
+            # def Equal(s):
+            #     a = comparison_safe_converter(f(s[1], c))
+            #     b = comparison_safe_converter(f(s[2], c))
+            #     return a == b
+            #     if type(a) in [int, float, str]:
+            #         a = f"{a}"
+            #     elif type(a) in [bool, NoneType]:
+            #         if a:
+            #             a = True
+            #         else:
+            #             a = None
+
+            #     if is_numeric(a):
+
+            #     lambda s: f"{f(s[1], c)}" == f"{f(s[2], c)}",
+
+            def IsDefined(s):
+                # Todo: This does not work
+                return s[1] in c.keys()
+
+            def Greater(s):
+                v1, v2 = comparison_safe_converter_for_pairs(f(s[1], c), f(s[2], c))
+                try:
+                    return v1 > v2
+                except TypeError:
+                    return False
+
+            def GreaterEqual(s):
+                v1, v2 = comparison_safe_converter_for_pairs(f(s[1], c), f(s[2], c))
+                try:
+                    return v1 >= v2
+                except TypeError:
+                    return False
+
+            def Less(s):
+                v1, v2 = comparison_safe_converter_for_pairs(f(s[1], c), f(s[2], c))
+                try:
+                    return v1 < v2
+                except TypeError:
+                    return False
+
+            def LessEqual(s):
+                v1, v2 = comparison_safe_converter_for_pairs(f(s[1], c), f(s[2], c))
+                try:
+                    return v1 <= v2
+                except TypeError:
+                    return False
+
             constructs = {
                 "Sum": Sum,
                 "Add": Add,
@@ -405,6 +534,7 @@ def create_mathjson_solver(solver_parameters):
                 ),
                 "Constants": Constants,
                 "Switch": Switch,
+                "StrictSwitch": StrictSwitch,
                 "If": If,
                 "Multiply": lambda s: reduce(
                     lambda a, b: float(a) * float(b), [f(x, c) for x in s[1:]]
@@ -421,12 +551,21 @@ def create_mathjson_solver(solver_parameters):
                 "Ln": lambda s: math.log(f(s[1], c)),
                 "Log2": lambda s: math.log2(f(s[1], c)),
                 "Log10": lambda s: math.log10(f(s[1], c)),
-                "Equal": lambda s: f(s[1], c) == f(s[2], c),
-                "Greater": lambda s: f(s[1], c) > f(s[2], c),
-                "GreaterEqual": lambda s: f(s[1], c) >= f(s[2], c),
-                "Less": lambda s: f(s[1], c) < f(s[2], c),
-                "LessEqual": lambda s: f(s[1], c) <= f(s[2], c),
-                "NotEqual": lambda s: f(s[1], c) != f(s[2], c),
+                # "Equal": lambda s: f"{f(s[1], c)}" == f"{f(s[2], c)}",
+                "Equal": lambda s: comparison_safe_converter(f(s[1], c))
+                == comparison_safe_converter(f(s[2], c)),
+                "StrictEqual": lambda s: f(s[1], c) == f(s[2], c),
+                # "Greater": lambda s: f(s[1], c) > f(s[2], c),
+                "Greater": Greater,
+                # "GreaterEqual": lambda s: f(s[1], c) >= f(s[2], c),
+                "GreaterEqual": GreaterEqual,
+                # "Less": lambda s: f(s[1], c) < f(s[2], c),
+                "Less": Less,
+                # "LessEqual": lambda s: f(s[1], c) <= f(s[2], c),
+                "LessEqual": LessEqual,
+                # "NotEqual": lambda s: f(s[1], c) != f(s[2], c),
+                "NotEqual": lambda s: comparison_safe_converter(f(s[1], c))
+                != comparison_safe_converter(f(s[2], c)),
                 "Abs": lambda s: abs(f(s[1], c)),
                 "Round": lambda s: (
                     round(f(s[1], c), f(s[2], c))
@@ -454,8 +593,11 @@ def create_mathjson_solver(solver_parameters):
                 "Float": Float,
                 "Str": Str,
                 "Not": Not,
-                "IsDefined": lambda s: s[1] in c,
+                # "IsDefined": lambda s: s[1] in c,
+                "IsDefined": IsDefined,
                 "Map": Map,
+                "StrictMap": StrictMap,
+                "Filter": Filter,
                 "HasMatchingSublist": HasMatchingSublist,
                 "Strptime": Strptime,
                 "Strftime": Strftime,
@@ -469,7 +611,17 @@ def create_mathjson_solver(solver_parameters):
             if s[0] in constructs:
                 try:
                     return constructs[s[0]](s)
-                except Exception as e:
+
+                # except RecursionError:
+                #     return s[0]
+                # except Exception as e:
+                except TypeError as e:
+                    raise MathJSONException(e, s, mathjson_construct=s[0])
+                except ValueError as e:
+                    raise MathJSONException(e, s, mathjson_construct=s[0])
+                except IndexError as e:
+                    raise MathJSONException(e, s, mathjson_construct=s[0])
+                except ZeroDivisionError as e:
                     raise MathJSONException(e, s, mathjson_construct=s[0])
             else:
                 # raise MathJSONException(
@@ -477,7 +629,10 @@ def create_mathjson_solver(solver_parameters):
                 # )
                 return s
         elif s in solver_parameters:
-            return f(solver_parameters[s], c)
+            try:
+                return f(solver_parameters[s], c)
+            except RecursionError:
+                return solver_parameters[s]
         elif s in c:
             return f(c[s], c)
         else:
@@ -538,6 +693,14 @@ def extract_variables(s: Union[list, int, float, str], li: set, ignore_list: set
         "IsDefined",
         "Map",
         "HasMatchingSublist",
+        "Strptime",
+        "Strftime",
+        "Today",
+        "Now",
+        "TimeDeltaWeeks",
+        "TimeDeltaHours",
+        "TimeDeltaMinutes",
+        "TimeDeltaDays",
     ]
     if isinstance(s, str):
         if s in ignore_list:
