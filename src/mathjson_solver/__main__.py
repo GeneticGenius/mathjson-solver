@@ -1,12 +1,16 @@
 import numbers
 from typing import Union, Any
 from functools import reduce
-import math
-from copy import deepcopy
-from statistics import median
-import logging
-import traceback
 import datetime
+import logging
+import math
+import numbers
+import operator
+import traceback
+from copy import deepcopy
+from functools import reduce
+from statistics import median
+from typing import Union
 
 NoneType = type(None)
 
@@ -26,19 +30,6 @@ class MathJSONException(Exception):
         else:
             m = str(self.e)
         return f"Problem in {self.construct}. {self.expr}. {m}"
-
-
-# def requires_array(func):
-#     def inner1(*args, **kwargs):
-#         try:
-#             if args[0][1][0] == "Array" and len(args[0][1]) > 0:
-#                 return func(*args, **kwargs)
-#             else:
-#                 raise ValueError(f"'{func.__name__}' should receive a list")
-#         except TypeError:
-#             raise ValueError(f"'{func.__name__}' really should receive a list")
-
-#     return inner1
 
 
 def is_numeric(x):
@@ -82,54 +73,22 @@ def has_matching_sublist(
             # Check if the end of the list matches
             count = sum(
                 1
-                for i in range(len(my_list) - required_match_count, len(my_list))
+                for i in range(
+                    len(my_list) - required_match_count, len(my_list)
+                )
                 if conditions[i]
             )
             return count == required_match_count
         elif position < -1:
             # Skip the last `abs(position)` elements
-            count = sum(1 for i in range(len(my_list) + position) if conditions[i])
+            count = sum(
+                1 for i in range(len(my_list) + position) if conditions[i]
+            )
             return count == required_match_count
     else:
         # Check for non-contiguous matches
         count = sum(1 for i in range(len(my_list)) if conditions[i])
         return count >= required_match_count
-
-
-# def has_sublist2(
-#     *,
-#     my_list: list,
-#     required_match_count: int,
-#     position: int,
-#     contiguous: bool,
-#     condition: callable,
-# ) -> bool:
-#     if contiguous:
-#         # Check for contiguous matches based on position
-#         if position == 0:
-#             # Check if the beginning of the list matches
-#             count = sum(1 for x in my_list[:required_match_count] if condition(x))
-#             return count == required_match_count
-#         elif position > 0:
-#             # Skip the first `position` elements
-#             count = sum(
-#                 1
-#                 for x in my_list[position : position + required_match_count]
-#                 if condition(x)
-#             )
-#             return count == required_match_count
-#         elif position == -1:
-#             # Check if the end of the list matches
-#             count = sum(1 for x in my_list[-required_match_count:] if condition(x))
-#             return count == required_match_count
-#         elif position < -1:
-#             # Skip the last `abs(position)` elements
-#             count = sum(1 for x in my_list[:position] if condition(x))
-#             return count == required_match_count
-#     else:
-#         # Check for non-contiguous matches
-#         count = sum(1 for x in my_list if condition(x))
-#         return count >= required_match_count
 
 
 def comparison_safe_converter(x):
@@ -151,6 +110,46 @@ def comparison_safe_converter_for_pairs(
     if is_numeric(v2):
         v2 = float(v2)
     return v1, v2
+
+
+def has_sublist2(
+    *,
+    my_list: list,
+    required_match_count: int,
+    position: int,
+    contiguous: bool,
+    condition: callable,
+) -> bool:
+    if contiguous:
+        # Check for contiguous matches based on position
+        if position == 0:
+            # Check if the beginning of the list matches
+            count = sum(
+                1 for x in my_list[:required_match_count] if condition(x)
+            )
+            return count == required_match_count
+        elif position > 0:
+            # Skip the first `position` elements
+            count = sum(
+                1
+                for x in my_list[position : position + required_match_count]
+                if condition(x)
+            )
+            return count == required_match_count
+        elif position == -1:
+            # Check if the end of the list matches
+            count = sum(
+                1 for x in my_list[-required_match_count:] if condition(x)
+            )
+            return count == required_match_count
+        elif position < -1:
+            # Skip the last `abs(position)` elements
+            count = sum(1 for x in my_list[:position] if condition(x))
+            return count == required_match_count
+    else:
+        # Check for non-contiguous matches
+        count = sum(1 for x in my_list if condition(x))
+        return count >= required_match_count
 
 
 def create_mathjson_solver(solver_parameters):
@@ -219,22 +218,36 @@ def create_mathjson_solver(solver_parameters):
 
             def Max(s):
                 if isinstance(s[1], str):
-                    return max([f(x, c) for x in f(s[1], c) if is_numeric(f(x, c))])
+                    return max(
+                        [f(x, c) for x in f(s[1], c) if is_numeric(f(x, c))]
+                    )
                 else:
-                    return max([f(x, c) for x in s[1][1:] if is_numeric(f(x, c))])
+                    return max(
+                        [f(x, c) for x in s[1][1:] if is_numeric(f(x, c))]
+                    )
 
             def Min(s):
                 if isinstance(s[1], str):
-                    return min([f(x, c) for x in f(s[1], c) if is_numeric(f(x, c))])
+                    return min(
+                        [f(x, c) for x in f(s[1], c) if is_numeric(f(x, c))]
+                    )
                 else:
-                    return min([f(x, c) for x in s[1][1:] if is_numeric(f(x, c))])
+                    return min(
+                        [f(x, c) for x in s[1][1:] if is_numeric(f(x, c))]
+                    )
 
             def Average(s):
                 if isinstance(s[1], str):
                     # A reference to "answer" has been passed
-                    s_ = [float(f(x, c)) for x in f(s[1], c) if is_numeric(f(x, c))]
+                    s_ = [
+                        float(f(x, c))
+                        for x in f(s[1], c)
+                        if is_numeric(f(x, c))
+                    ]
                 else:
-                    s_ = [float(f(x, c)) for x in s[1][1:] if is_numeric(f(x, c))]
+                    s_ = [
+                        float(f(x, c)) for x in s[1][1:] if is_numeric(f(x, c))
+                    ]
                 # print(f"{s_} {sum(s_)}/{len(s_)}")
                 try:
                     return sum(s_) / len(s_)
@@ -243,9 +256,13 @@ def create_mathjson_solver(solver_parameters):
 
             def Median(s):
                 if isinstance(s[1], str):
-                    return median([f(x, c) for x in f(s[1], c) if is_numeric(f(x, c))])
+                    return median(
+                        [f(x, c) for x in f(s[1], c) if is_numeric(f(x, c))]
+                    )
                 else:
-                    return median([f(x, c) for x in s[1][1:] if is_numeric(f(x, c))])
+                    return median(
+                        [f(x, c) for x in s[1][1:] if is_numeric(f(x, c))]
+                    )
 
             def Length(s):
                 if isinstance(s[1], str):
@@ -311,11 +328,14 @@ def create_mathjson_solver(solver_parameters):
                                 return f(x[1], c)
                             except MathJSONException:
                                 logging.error(
-                                    "MathJSONException: %s", traceback.format_exc()
+                                    "MathJSONException: %s",
+                                    traceback.format_exc(),
                                 )
                                 continue
                     except MathJSONException:
-                        logging.error("MathJSONException: %s", traceback.format_exc())
+                        logging.error(
+                            "MathJSONException: %s", traceback.format_exc()
+                        )
                         return f(s[-1], c)  # return default value (else)
 
                 return f(s[-1], c)
@@ -478,51 +498,32 @@ def create_mathjson_solver(solver_parameters):
             def TimeDeltaWeeks(s):
                 return datetime.timedelta(weeks=f(s[1], c))
 
-            # def Equal(s):
-            #     a = comparison_safe_converter(f(s[1], c))
-            #     b = comparison_safe_converter(f(s[2], c))
-            #     return a == b
-            #     if type(a) in [int, float, str]:
-            #         a = f"{a}"
-            #     elif type(a) in [bool, NoneType]:
-            #         if a:
-            #             a = True
-            #         else:
-            #             a = None
+            def Compare(op, s, c):
+                """
+                Compare multiple operands using the given binary operator,
+                after coercing each operand to float.
 
-            #     if is_numeric(a):
+                Args:
+                    op: A binary function like operator.lt, operator.gt, operator.eq.
+                    s: A MathJSON-style list, e.g. ["Less", "a", "b", "c"].
+                    c: A context passed down to f().
 
-            #     lambda s: f"{f(s[1], c)}" == f"{f(s[2], c)}",
+                Returns:
+                    bool: True if the chain of comparisons holds, False otherwise.
+                """
 
-            def IsDefined(s):
-                # Todo: This does not work
-                return s[1] in c.keys()
+                def safe_float(val):
+                    try:
+                        return float(val)
+                    except (ValueError, TypeError):
+                        return val
 
-            def Greater(s):
-                v1, v2 = comparison_safe_converter_for_pairs(f(s[1], c), f(s[2], c))
+                values = [safe_float(f(s[i], c)) for i in range(1, len(s))]
                 try:
-                    return v1 > v2
-                except TypeError:
-                    return False
-
-            def GreaterEqual(s):
-                v1, v2 = comparison_safe_converter_for_pairs(f(s[1], c), f(s[2], c))
-                try:
-                    return v1 >= v2
-                except TypeError:
-                    return False
-
-            def Less(s):
-                v1, v2 = comparison_safe_converter_for_pairs(f(s[1], c), f(s[2], c))
-                try:
-                    return v1 < v2
-                except TypeError:
-                    return False
-
-            def LessEqual(s):
-                v1, v2 = comparison_safe_converter_for_pairs(f(s[1], c), f(s[2], c))
-                try:
-                    return v1 <= v2
+                    return all(
+                        op(values[i], values[i + 1])
+                        for i in range(len(values) - 1)
+                    )
                 except TypeError:
                     return False
 
@@ -551,21 +552,12 @@ def create_mathjson_solver(solver_parameters):
                 "Ln": lambda s: math.log(f(s[1], c)),
                 "Log2": lambda s: math.log2(f(s[1], c)),
                 "Log10": lambda s: math.log10(f(s[1], c)),
-                # "Equal": lambda s: f"{f(s[1], c)}" == f"{f(s[2], c)}",
-                "Equal": lambda s: comparison_safe_converter(f(s[1], c))
-                == comparison_safe_converter(f(s[2], c)),
-                "StrictEqual": lambda s: f(s[1], c) == f(s[2], c),
-                # "Greater": lambda s: f(s[1], c) > f(s[2], c),
-                "Greater": Greater,
-                # "GreaterEqual": lambda s: f(s[1], c) >= f(s[2], c),
-                "GreaterEqual": GreaterEqual,
-                # "Less": lambda s: f(s[1], c) < f(s[2], c),
-                "Less": Less,
-                # "LessEqual": lambda s: f(s[1], c) <= f(s[2], c),
-                "LessEqual": LessEqual,
-                # "NotEqual": lambda s: f(s[1], c) != f(s[2], c),
-                "NotEqual": lambda s: comparison_safe_converter(f(s[1], c))
-                != comparison_safe_converter(f(s[2], c)),
+                "Less": lambda s: Compare(operator.lt, s, c),
+                "Greater": lambda s: Compare(operator.gt, s, c),
+                "Equal": lambda s: Compare(operator.eq, s, c),
+                "LessEqual": lambda s: Compare(operator.le, s, c),
+                "GreaterEqual": lambda s: Compare(operator.ge, s, c),
+                "NotEqual": lambda s: Compare(operator.ne, s, c),
                 "Abs": lambda s: abs(f(s[1], c)),
                 "Round": lambda s: (
                     round(f(s[1], c), f(s[2], c))
@@ -593,8 +585,6 @@ def create_mathjson_solver(solver_parameters):
                 "Float": Float,
                 "Str": Str,
                 "Not": Not,
-                # "IsDefined": lambda s: s[1] in c,
-                "IsDefined": IsDefined,
                 "Map": Map,
                 "StrictMap": StrictMap,
                 "Filter": Filter,
@@ -642,7 +632,9 @@ def create_mathjson_solver(solver_parameters):
     return f
 
 
-def extract_variables(s: Union[list, int, float, str], li: set, ignore_list: set):
+def extract_variables(
+    s: Union[list, int, float, str], li: set, ignore_list: set
+):
     constructs = [
         "Add",
         "Sum",
