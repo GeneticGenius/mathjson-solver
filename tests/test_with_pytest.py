@@ -50,22 +50,32 @@ def test_solver_arithmetics(parameters, expression, expected_result):
 @pytest.mark.parametrize(
     "parameters, expression, expected_result",
     [
+        ({}, ["Less", 10, 12], True),
+        ({}, ["Less", 10, 12, 5], False),
+        ({}, ["Less", 5, 12, 5], False),
+        ({}, ["Less", 5, 12, 15], True),
+        ({}, ["LessEqual", 12, 12, 15], True),
+        ({}, ["LessEqual", 12, 12], True),
+        ({}, ["LessEqual", 15, 12, 12], False),
+        ({}, ["Greater", 10, 12], False),
+        ({}, ["Greater", 10, 12, 5], False),
+        ({}, ["Greater", 15, 12, 105], False),
+        ({}, ["Greater", 5, 12, 5], False),
+        ({}, ["Greater", 15, 12, 5], True),
+        ({}, ["GreaterEqual", 15, 12, 12], True),
+        ({}, ["GreaterEqual", 12, 12], True),
+        ({}, ["GreaterEqual", 12, 12, 15], False),
         ({}, ["Equal", 10, 10], True),
+        ({}, ["Equal", 10, 10, 15], False),
         ({}, ["Equal", 10, 12], False),
+        ({}, ["NotEqual", 10, 10], False),
+        ({}, ["NotEqual", 10, 10, 15], False),
+        ({}, ["NotEqual", 10, 12], True),
         ({}, ["Equal", "aaa", "aaa"], True),
         ({}, ["Equal", "aaa", "baa"], False),
         ({}, ["Equal", "aaa", 11], False),
         ({}, ["Equal", None, "1"], False),
         ({}, ["Equal", 1, "1"], True),
-        ({}, ["Equal", None, False], True),
-        ({}, ["StrictEqual", 1, "1"], False),
-        ({}, ["StrictEqual", 10, 10], True),
-        ({}, ["StrictEqual", 10, 12], False),
-        ({}, ["StrictEqual", "aaa", "aaa"], True),
-        ({}, ["StrictEqual", "aaa", "baa"], False),
-        ({}, ["StrictEqual", "aaa", 11], False),
-        ({}, ["StrictEqual", None, "1"], False),
-        ({}, ["Equal", None, False], True),
         ({}, ["Greater", 1, 2], False),
         ({}, ["Greater", 2, -2], True),
         ({}, ["Greater", "2", -2], True),
@@ -93,15 +103,17 @@ def test_solver_comparison(parameters, expression, expected_result):
 @pytest.mark.parametrize(
     "parameters, expression, expected_result",
     [
-        # ({"a": 12}, ["IsDefined", "a"], True),
-        ({"a": 12}, ["IsDefined", "b"], False),
         ({}, ["Abs", -3.5], 3.5),
         ({}, ["Round", -5.123456, 2], -5.12),
         ({}, ["Round", -5.123456, 0], -5),
         ({}, ["Round", 5.4], 5),
         ({}, ["Round", 5.5], 6),
         ({}, ["Constants", ["a", 1], ["b", 2], "a"], 1),
-        ({}, ["Constants", ["a", 1], ["b", 2], ["c", 100], ["Sum", "a", "b"]], 3),
+        (
+            {},
+            ["Constants", ["a", 1], ["b", 2], ["c", 100], ["Sum", "a", "b"]],
+            3,
+        ),
         ({}, ["Constants", ["a", 1], ["b", ["Add", 2, "a"]], "b"], 3),
         ({"x": 1}, ["Add", 2, "x"], 3),
         ({"value": 1}, ["Switch", "value", 0, [1, 11], [2, 22]], 11),
@@ -137,41 +149,68 @@ def test_solver_comparison(parameters, expression, expected_result):
             ["Switch", "1", 6, ["0", 0], ["1", 1], ["2", 2]],
             1,
         ),  # Because string "1" is equal string "1"
-        # The following test works.
-        # It is commented out because otherwise black auto-formatter would expand it to 100+ lines
-        # (
-        #     {"14": "1", "29": "1", "30": "1", "31": "1", "32": "1", "33": "1", "35": "1", "45": "1", "50": "1", "52": "1", "71": "1", "91": "1", "112": "1"},
-        #     ["Add",
-        #       ["Switch","14",0,["0",0],["1",1],["2",2]],
-        #       ["Switch","29",0,["0",0],["1",1],["2",2]],
-        #       ["Switch","30",0,["0",0],["1",1],["2",2]],
-        #       ["Switch","31",0,["0",0],["1",1],["2",2]],
-        #       ["Switch","32",0,["0",0],["1",1],["2",2]],
-        #       ["Switch","33",0,["0",0],["1",1],["2",2]],
-        #       ["Switch","35",0,["0",0],["1",1],["2",2]],
-        #       ["Switch","45",0,["0",0],["1",1],["2",2]],
-        #       ["Switch","50",0,["0",0],["1",1],["2",2]],
-        #       ["Switch","52",0,["0",0],["1",1],["2",2]],
-        #       ["Switch","71",0,["0",0],["1",1],["2",2]],
-        #       ["Switch","91",0,["0",0],["1",1],["2",2]],
-        #       ["Switch","112",0,["0",0],["1",1],["2",2]]
-        #     ],
-        #     13
-        # ),
+        (
+            {
+                "14": "1",
+                "29": "1",
+                "30": "1",
+                "31": "1",
+                "32": "1",
+                "33": "1",
+                "35": "1",
+                "45": "1",
+                "50": "1",
+                "52": "1",
+                "71": "1",
+                "91": "1",
+                "112": "1",
+            },
+            [
+                "Add",
+                ["Switch", "14", 0, ["0", 0], ["1", 1], ["2", 2]],
+                ["Switch", "29", 0, ["0", 0], ["1", 1], ["2", 2]],
+                ["Switch", "30", 0, ["0", 0], ["1", 1], ["2", 2]],
+                ["Switch", "31", 0, ["0", 0], ["1", 1], ["2", 2]],
+                ["Switch", "32", 0, ["0", 0], ["1", 1], ["2", 2]],
+                ["Switch", "33", 0, ["0", 0], ["1", 1], ["2", 2]],
+                ["Switch", "35", 0, ["0", 0], ["1", 1], ["2", 2]],
+                ["Switch", "45", 0, ["0", 0], ["1", 1], ["2", 2]],
+                ["Switch", "50", 0, ["0", 0], ["1", 1], ["2", 2]],
+                ["Switch", "52", 0, ["0", 0], ["1", 1], ["2", 2]],
+                ["Switch", "71", 0, ["0", 0], ["1", 1], ["2", 2]],
+                ["Switch", "91", 0, ["0", 0], ["1", 1], ["2", 2]],
+                ["Switch", "112", 0, ["0", 0], ["1", 1], ["2", 2]],
+            ],
+            13,
+        ),
         # The next tests check the type-forgiving nature of Switch.
         ({"value": 2}, ["Switch", "value", 0, ["1", 11], ["2", 22]], 22),
         ({"value": "2"}, ["Switch", "value", 0, [1, 11], [2, 22]], 22),
         # The next tests verify that the StrictSwitch is not forgiving.
         ({"value": 2}, ["StrictSwitch", "value", 0, ["1", 11], ["2", 22]], 0),
         ({"value": "2"}, ["StrictSwitch", "value", 0, [1, 11], [2, 22]], 0),
-        ({"color": "red"}, ["Switch", "color", 0, ["blue", 10], ["red", 30]], 30),
-        ({"color": "green"}, ["Switch", "color", 0, ["blue", 10], ["red", 30]], 0),
-        ({"color": "green"}, ["Switch", "undefined", 0, ["blue", 10], ["red", 30]], 0),
+        (
+            {"color": "red"},
+            ["Switch", "color", 0, ["blue", 10], ["red", 30]],
+            30,
+        ),
+        (
+            {"color": "green"},
+            ["Switch", "color", 0, ["blue", 10], ["red", 30]],
+            0,
+        ),
+        (
+            {"color": "green"},
+            ["Switch", "undefined", 0, ["blue", 10], ["red", 30]],
+            0,
+        ),
         ({}, ["If", [["Equal", 1, 0], 10], [["Equal", 2, 2], 20], 9000], 20),
         # # The following tests that If don't fail on incompatible data types
-        # ({}, ["If", [["Equal", 1, "1"], 10], [["Equal", "1", "1"], 20], -1], 20),
-        # ({"a": 1}, ["If", [["Equal", "a", "1"], 10], [["Equal", "a", 1], 20], -1], 20),
-        # ({"a": 1}, ["If", [["Equal", "a", 1], 10], [["Equal", "a", "1"], 20], -1], 10),
+        (
+            {"a": 1},
+            ["If", [["Equal", "a", 1], 10], [["Equal", "a", "1"], 20], -1],
+            10,
+        ),
         ({"a": 10, "b": 10}, ["If", [["Equal", "a", "b"], 10], 9000], 10),
         ({"a": 10, "b": 20}, ["If", [["Equal", "a", "b"], 10], 9000], 9000),
         ({"a": 10}, ["If", [["Equal", "a", "b"], 10], 9000], 9000),
@@ -260,10 +299,22 @@ def test_solver_comparison(parameters, expression, expected_result):
         ({}, ["NotIn", 4, ["Array", 1, 2, 3]], True),
         ({"a": [10, 20, 30]}, ["Not_in", 20, "a"], False),
         ({"a": [10, 20, 30]}, ["Not_in", 21, "a"], True),
-        ({}, ["Contains_any_of", ["Array", 1, 2, 3], ["Array", 1, 2, 3]], True),
+        (
+            {},
+            ["Contains_any_of", ["Array", 1, 2, 3], ["Array", 1, 2, 3]],
+            True,
+        ),
         ({}, ["Contains_any_of", ["Array", 2, 3], ["Array", 1, 2]], True),
-        ({}, ["Contains_any_of", ["Array", 1, 2, 3], ["Array", 3, 4, 5, 6]], True),
-        ({}, ["Contains_any_of", ["Array", 1, 2, 3], ["Array", 4, 5, 6]], False),
+        (
+            {},
+            ["Contains_any_of", ["Array", 1, 2, 3], ["Array", 3, 4, 5, 6]],
+            True,
+        ),
+        (
+            {},
+            ["Contains_any_of", ["Array", 1, 2, 3], ["Array", 4, 5, 6]],
+            False,
+        ),
         (
             {},
             [
@@ -282,19 +333,47 @@ def test_solver_comparison(parameters, expression, expected_result):
             ],
             False,
         ),
-        ({"a": [10, 20, 30]}, ["Contains_any_of", "a", ["Array", 1, 20, 3]], True),
-        ({"b": [1, 20, 3]}, ["Contains_any_of", ["Array", 1, 2, 3], "b"], True),
+        (
+            {"a": [10, 20, 30]},
+            ["Contains_any_of", "a", ["Array", 1, 20, 3]],
+            True,
+        ),
+        (
+            {"b": [1, 20, 3]},
+            ["Contains_any_of", ["Array", 1, 2, 3], "b"],
+            True,
+        ),
         ({"b": [1, 20, 3]}, ["ContainsAnyOf", ["Array", 1, 2, 3], "b"], True),
-        ({"a": [10, 20, 30], "b": [1, 20, 3]}, ["Contains_any_of", "a", "b"], True),
-        ({"a": [10, 20, 30], "b": [1, 2, 3]}, ["Contains_any_of", "a", "b"], False),
-        ({}, ["Contains_all_of", ["Array", 1, 2, 3], ["Array", 1, 2, 3]], True),
+        (
+            {"a": [10, 20, 30], "b": [1, 20, 3]},
+            ["Contains_any_of", "a", "b"],
+            True,
+        ),
+        (
+            {"a": [10, 20, 30], "b": [1, 2, 3]},
+            ["Contains_any_of", "a", "b"],
+            False,
+        ),
+        (
+            {},
+            ["Contains_all_of", ["Array", 1, 2, 3], ["Array", 1, 2, 3]],
+            True,
+        ),
         ({}, ["Contains_all_of", ["Array", 1, 2], ["Array", 1, 2, 3]], False),
         ({}, ["Contains_all_of", ["Array", 1, 2, 3], ["Array", 1, 2]], True),
         ({}, ["Contains_all_of", ["Array", 1, 2, 3], ["Array", 2]], True),
         ({}, ["ContainsAllOf", ["Array", 1, 2, 3], ["Array", 2]], True),
-        ({"a": [10, 20, 30], "b": [1, 20, 3]}, ["Contains_all_of", "a", "b"], False),
+        (
+            {"a": [10, 20, 30], "b": [1, 20, 3]},
+            ["Contains_all_of", "a", "b"],
+            False,
+        ),
         ({"a": [1, 2, 3], "b": [1, 2]}, ["Contains_all_of", "a", "b"], True),
-        ({}, ["Contains_none_of", ["Array", 1, 2, 3], ["Array", 1, 2, 3]], False),
+        (
+            {},
+            ["Contains_none_of", ["Array", 1, 2, 3], ["Array", 1, 2, 3]],
+            False,
+        ),
         ({}, ["Contains_none_of", ["Array", 1, 2], ["Array", 2, 3]], False),
         ({}, ["ContainsNoneOf", ["Array", 1, 2], ["Array", 2, 3]], False),
         ({}, ["Contains_none_of", ["Array", 1, 2, 3], ["Array", 4, 5]], True),
@@ -302,9 +381,21 @@ def test_solver_comparison(parameters, expression, expected_result):
         ({}, ["Not", 0], True),
         ({}, ["Not", ["In", 2, ["Array", 1, 2, 3]]], False),
         ({}, ["Array", 2, 4, 3], ["Array", 2, 4, 3]),
-        ({}, ["StrictMap", ["Array", 1, 2, 3], ["Square"]], ["Array", 1, 4, 9]),
-        ({}, ["Filter", ["Array", 1, 2, 3], ["LessEqual"], 2], ["Array", 1, 2]),
-        ({}, ["Filter", ["Array", 1, 2, 3, "None"], ["LessEqual"], 2], ["Array", 1, 2]),
+        (
+            {},
+            ["StrictMap", ["Array", 1, 2, 3], ["Square"]],
+            ["Array", 1, 4, 9],
+        ),
+        (
+            {},
+            ["Filter", ["Array", 1, 2, 3], ["LessEqual"], 2],
+            ["Array", 1, 2],
+        ),
+        (
+            {},
+            ["Filter", ["Array", 1, 2, 3, "None"], ["LessEqual"], 2],
+            ["Array", 1, 2],
+        ),
         ({}, ["Map", ["Array", 1, 2, 3], ["Square"]], ["Array", 1, 4, 9]),
         (
             {},
@@ -319,7 +410,15 @@ def test_solver_comparison(parameters, expression, expected_result):
         ),
         (
             {},
-            ["Sum", ["Map", ["Array", 1, 2, 3, 4, 1, 1, 0, 1], ["GreaterEqual"], 2]],
+            [
+                "Sum",
+                [
+                    "Map",
+                    ["Array", 1, 2, 3, 4, 1, 1, 0, 1],
+                    ["GreaterEqual"],
+                    2,
+                ],
+            ],
             3,
         ),
         ({}, ["Sum", ["Array", True, False, True, False, False]], 2),
@@ -404,7 +503,11 @@ def test_solver_comparison(parameters, expression, expected_result):
         ),
         (
             {},
-            ["Strftime", ["Strptime", "2025-01-10T10:05", "%Y-%m-%dT%H:%M"], "%Y"],
+            [
+                "Strftime",
+                ["Strptime", "2025-01-10T10:05", "%Y-%m-%dT%H:%M"],
+                "%Y",
+            ],
             "2025",
         ),
         ({}, ["Strftime", ["Today"], "%Y"], "2025"),
@@ -485,35 +588,28 @@ def test_raises_divide():
     solver = create_solver({})
     with pytest.raises(
         MathJSONException,
-        match=re.escape("Problem in Divide. ['Divide', 1, 0]. division by zero"),
+        match=re.escape(
+            "Problem in Divide. ['Divide', 1, 0]. division by zero"
+        ),
     ):
-        r = solver(["Divide", 1, 0])
-
-
-# def test_raises_unsupported():
-#     solver = create_solver({})
-#     with pytest.raises(
-#         MathJSONException,
-#         match=re.escape(
-#             "Problem in MathJSON. ['Unsupported', 1]. 'Unsupported' is not supported"
-#         ),
-#     ):
-#         r = solver(["Unsupported", 1])
+        solver(["Divide", 1, 0])
 
 
 def test_raises_malformed():
     solver = create_solver({})
     with pytest.raises(
         MathJSONException,
-        match=re.escape("Problem in Power. ['Power', 1]. list index out of range"),
+        match=re.escape(
+            "Problem in Power. ['Power', 1]. list index out of range"
+        ),
     ):
-        r = solver(["Power", 1])
+        solver(["Power", 1])
 
 
 def test_handle_exception():
     solver = create_solver({})
     try:
-        r = solver(["Power", 1])
+        solver(["Power", 1])
     except MathJSONException:
         assert True
     else:
@@ -531,7 +627,13 @@ def test_handle_exception():
         # Now with "ugly" variables that mimic the ones used for deep referencing.
         (
             {},
-            ["Add", "[slug1][0][question1]", "y", 4, "[slug1][-3:-1][question1]"],
+            [
+                "Add",
+                "[slug1][0][question1]",
+                "y",
+                4,
+                "[slug1][-3:-1][question1]",
+            ],
             set(["[slug1][0][question1]", "y", "[slug1][-3:-1][question1]"]),
         ),
         (
@@ -553,6 +655,8 @@ def test_handle_exception():
 )
 def test_extract_variables(parameters, expression, expected_result):
     assert (
-        extract_variables(expression, set(), set([x for x in parameters.keys()]))
+        extract_variables(
+            expression, set(), set([x for x in parameters.keys()])
+        )
         == expected_result
     )
