@@ -1,16 +1,13 @@
 import numbers
-from typing import Union, Any
+from typing import Union
 from functools import reduce
-import datetime
+from datetime import datetime, date, timedelta
 import logging
 import math
-import numbers
 import operator
 import traceback
 from copy import deepcopy
-from functools import reduce
 from statistics import median
-from typing import Union
 
 NoneType = type(None)
 
@@ -394,6 +391,11 @@ def create_mathjson_solver(solver_parameters):
                     raise ValueError("Wrong parameters for 'Str'")
                 return f"{f(s[1])}"
 
+            def Date(s):
+                if len(s) < 2:
+                    raise ValueError("Wrong parameters for 'Date'")
+                return datetime.fromisoformat(s[1])
+
             def Not(s):
                 return not f(s[1])
 
@@ -473,7 +475,7 @@ def create_mathjson_solver(solver_parameters):
             def Strptime(s):
                 datetime_str = f(s[1], c)
                 parameters = f(s[2], c)
-                return datetime.datetime.strptime(datetime_str, parameters)
+                return datetime.strptime(datetime_str, parameters)
 
             def Strftime(s):
                 dt = f(s[1], c)
@@ -481,22 +483,22 @@ def create_mathjson_solver(solver_parameters):
                 return dt.strftime(parameters)
 
             def Now(s):
-                return datetime.datetime.now()
+                return datetime.now()
 
             def Today(s):
-                return datetime.date.today()
+                return date.today()
 
             def TimeDeltaDays(s):
-                return datetime.timedelta(days=f(s[1], c))
+                return timedelta(days=f(s[1], c))
 
             def TimeDeltaMinutes(s):
-                return datetime.timedelta(minutes=f(s[1], c))
+                return timedelta(minutes=f(s[1], c))
 
             def TimeDeltaHours(s):
-                return datetime.timedelta(hours=f(s[1], c))
+                return timedelta(hours=f(s[1], c))
 
             def TimeDeltaWeeks(s):
-                return datetime.timedelta(weeks=f(s[1], c))
+                return timedelta(weeks=f(s[1], c))
 
             def Compare(op, s, c):
                 """
@@ -584,6 +586,7 @@ def create_mathjson_solver(solver_parameters):
                 "Int": Int,
                 "Float": Float,
                 "Str": Str,
+                "Date": Date,
                 "Not": Not,
                 "Map": Map,
                 "StrictMap": StrictMap,
