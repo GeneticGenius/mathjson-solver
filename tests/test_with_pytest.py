@@ -3,6 +3,8 @@ import os
 import pytest
 import re
 
+from datetime import datetime
+
 sys.path.append(os.path.join(os.path.dirname(__file__), "../src/"))
 
 from mathjson_solver import create_solver, MathJSONException, extract_variables
@@ -264,6 +266,26 @@ def test_solver_comparison(parameters, expression, expected_result):
         ({}, ["Int", "12"], 12),
         ({}, ["Int", "12.2"], 12),
         ({}, ["Float", "12.2"], 12.2),
+        (
+            {},
+            ["Date", "2025-11-05T17:28:01"],
+            datetime(2025, 11, 5, 17, 28, 1),
+        ),
+        (
+            {},
+            ["Date", "2025-07-21 10:30:45"],
+            datetime(2025, 7, 21, 10, 30, 45),
+        ),
+        (
+            {},
+            ["Date", "2025-11-05"],
+            datetime(2025, 11, 5),
+        ),
+        (
+            {},
+            ["Strptime", "2025-01-10T10:05", "%Y-%m-%dT%H:%M"],
+            datetime(2025, 1, 10, 10, 5),
+        ),
         ({}, ["Any", ["Array", 0, 0, False, 0, 0]], False),
         ({}, ["Any", ["Array", 0, 1, False, 0, 0]], True),
         ({}, ["All", ["Array", 0, 1, False, 0, 0]], False),
@@ -510,8 +532,8 @@ def test_solver_comparison(parameters, expression, expected_result):
             ],
             "2025",
         ),
-        ({}, ["Strftime", ["Today"], "%Y"], "2025"),
-        ({}, ["Strftime", ["Now"], "%Y"], "2025"),
+        ({}, ["Strftime", ["Today"], "%Y"], "2026"),
+        ({}, ["Strftime", ["Now"], "%Y"], "2026"),
         (
             {},
             [
