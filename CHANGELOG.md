@@ -1,6 +1,15 @@
 # Changelog
 
-## 1.10.0-4
+## 1.10.0-4 (package version 1.14.0.post4)
+
+The Git tags of this fork (`1.10.0-x`) and the package version differ: tags `1.10.0-2` and `1.10.0-3` already declare version `1.14.0`, because upstream 1.14.0 was merged between `1.10.0-1` and `1.10.0-2`. Tag `1.10.0-4` declares `1.14.0.post4`, so the installed version keeps increasing (`pip show mathjson-solver`).
+
+| Git tag | Package version |
+|---|---|
+| 1.10.0-1 | 1.10.0 |
+| 1.10.0-2 | 1.14.0 |
+| 1.10.0-3 | 1.14.0 |
+| 1.10.0-4 | 1.14.0.post4 |
 
 ### Breaking changes
 - **`["Log", x]` is now the base-10 logarithm** (it was the natural logarithm). This aligns the solver with the CortexJS Compute Engine used by the front end. Consumers must migrate stored `["Log", x]` expressions to `["Ln", x]` to keep the previous behaviour.
@@ -24,5 +33,5 @@
 - `Power`, `Sqrt`, `Root` and `Square` use `math.pow` (never produce complex numbers) and return floats, e.g. `["Power", 2, 3]` is `8.0` (equal to `8`).
 
 ### Packaging / CI
-- `setup.cfg` and `setup.py` version set to `1.10.0-4`.
+- `setup.cfg` and `setup.py` version set to `1.14.0.post4` (tag `1.10.0-4`).
 - GitHub workflows test on Python 3.11 and 3.14 with `actions/setup-python@v5`.
