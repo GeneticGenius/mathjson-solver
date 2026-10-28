@@ -29,6 +29,10 @@ class MathJSONException(Exception):
         return f"Problem in {self.construct}. {self.expr}. {m}"
 
 
+class MathJSONDomainError(ValueError):
+    """The arguments are outside the mathematical domain of the operator"""
+
+
 def is_numeric(x):
     try:
         float(x)
@@ -149,7 +153,7 @@ def has_sublist2(
         return count >= required_match_count
 
 
-def create_mathjson_solver(solver_parameters):
+def create_mathjson_solver(solver_parameters, strict=False):
     def f(s, *args):
         if args:
             c = deepcopy(args[0])
@@ -529,6 +533,58 @@ def create_mathjson_solver(solver_parameters):
                 except TypeError:
                     return False
 
+            def domain_safe(fn, *args):
+                """Call `fn`; math domain errors become MathJSONDomainError"""
+                try:
+                    return fn(*args)
+                except ValueError as e:
+                    raise MathJSONDomainError(str(e))
+
+            def Power(s):
+                x = f(s[1], c)
+                y = f(s[2], c)
+                if x == 0 and y < 0:
+                    # Keep the division-by-zero error that pow() raised
+                    raise ZeroDivisionError("0 cannot be raised to a negative power")
+                return domain_safe(math.pow, x, y)
+
+            def Root(s):
+                x = f(s[1], c)
+                n = f(s[2], c)
+                r = 1.0 / n
+                if x < 0:
+                    # Only odd roots of negative numbers are real
+                    is_odd = (
+                        isinstance(n, (int, float))
+                        and float(n).is_integer()
+                        and n % 2 == 1
+                    )
+                    if not is_odd:
+                        raise MathJSONDomainError(
+                            "Even or fractional root of a negative number"
+                        )
+                    if n == 3:
+                        return -math.cbrt(-x)
+                    return -domain_safe(math.pow, -x, r)
+                if n == 3:
+                    return math.cbrt(x)
+                return domain_safe(math.pow, x, r)
+
+            def Log(s):
+                x = f(s[1], c)
+                if x <= 0:
+                    raise MathJSONDomainError(
+                        "Logarithm of a non-positive number"
+                    )
+                if len(s) < 3:
+                    return math.log10(x)
+                b = f(s[2], c)
+                if b <= 0 or b == 1:
+                    raise MathJSONDomainError(
+                        "Logarithm base must be positive and not equal to 1"
+                    )
+                return math.log(x, b)
+
             constructs = {
                 "Sum": Sum,
                 "Add": Add,
@@ -545,15 +601,15 @@ def create_mathjson_solver(solver_parameters):
                 "Divide": lambda s: f(s[1], c) / f(s[2], c),
                 "Rational": lambda s: f(s[1], c) / f(s[2], c),
                 "Negate": lambda s: -f(s[1], c),
-                "Power": lambda s: pow(f(s[1], c), f(s[2], c)),
-                "Root": lambda s: pow(f(s[1], c), 1.0 / f(s[2], c)),
-                "Sqrt": lambda s: pow(f(s[1], c), 1.0 / 2),
-                "Square": lambda s: pow(f(s[1], c), 2),
+                "Power": Power,
+                "Root": Root,
+                "Sqrt": lambda s: domain_safe(math.pow, f(s[1], c), 1.0 / 2),
+                "Square": lambda s: domain_safe(math.pow, f(s[1], c), 2),
                 "Exp": lambda s: math.exp(f(s[1], c)),
-                "Log": lambda s: math.log(f(s[1], c)),
-                "Ln": lambda s: math.log(f(s[1], c)),
-                "Log2": lambda s: math.log2(f(s[1], c)),
-                "Log10": lambda s: math.log10(f(s[1], c)),
+                "Log": Log,
+                "Ln": lambda s: domain_safe(math.log, f(s[1], c)),
+                "Log2": lambda s: domain_safe(math.log2, f(s[1], c)),
+                "Log10": lambda s: domain_safe(math.log10, f(s[1], c)),
                 "Less": lambda s: Compare(operator.lt, s, c),
                 "Greater": lambda s: Compare(operator.gt, s, c),
                 "Equal": lambda s: Compare(operator.eq, s, c),
@@ -603,7 +659,13 @@ def create_mathjson_solver(solver_parameters):
             }
             if s[0] in constructs:
                 try:
-                    return constructs[s[0]](s)
+                    res = constructs[s[0]](s)
+                    # Floats must be finite: inf is overflow, nan is undefined
+                    if isinstance(res, float) and not math.isfinite(res):
+                        if math.isnan(res):
+                            raise MathJSONDomainError("Result is not a number")
+                        raise OverflowError("Result is too large")
+                    return res
 
                 # except RecursionError:
                 #     return s[0]
@@ -616,10 +678,15 @@ def create_mathjson_solver(solver_parameters):
                     raise MathJSONException(e, s, mathjson_construct=s[0])
                 except ZeroDivisionError as e:
                     raise MathJSONException(e, s, mathjson_construct=s[0])
+                except OverflowError as e:
+                    raise MathJSONException(e, s, mathjson_construct=s[0])
             else:
-                # raise MathJSONException(
-                #     NotImplementedError(f"'{s[0]}' is not supported"), s
-                # )
+                if strict and isinstance(s[0], str):
+                    raise MathJSONException(
+                        NotImplementedError(f"'{s[0]}' is not supported"),
+                        s,
+                        mathjson_construct=s[0],
+                    )
                 return s
         elif s in solver_parameters:
             try:
@@ -628,6 +695,9 @@ def create_mathjson_solver(solver_parameters):
                 return solver_parameters[s]
         elif s in c:
             return f(c[s], c)
+        elif s == "ExponentialE":
+            # Parameters and context take precedence over the constant
+            return math.e
         else:
             # raise KeyError(f"Parameter '{s}' is not defined")
             return s
@@ -652,8 +722,10 @@ def extract_variables(
         "Root",
         "Sqrt",
         "Square",
+        "Rational",
         "Exp",
         "Log",
+        "Ln",
         "Log2",
         "Log10",
         "Equal",
@@ -696,6 +768,7 @@ def extract_variables(
         "TimeDeltaHours",
         "TimeDeltaMinutes",
         "TimeDeltaDays",
+        "ExponentialE",
     ]
     if isinstance(s, str):
         if s in ignore_list:

@@ -16,6 +16,7 @@
 * [Root](#root-and-square-root)
 * [Sqrt](#root-and-square-root)
 * [Exp](#exponents-and-logarithms)
+* [Ln](#exponents-and-logarithms)
 * [Log](#exponents-and-logarithms)
 * [Log2](#exponents-and-logarithms)
 * [Log10](#exponents-and-logarithms)
@@ -139,26 +140,37 @@ Performs a division.
 ```
 
 #### Square and Power
-`Power` raises a number to given power. `Square` is a special case of `Power`.
+`Power` raises a number to given power. `Square` is a special case of `Power`. A negative base with a non-integer exponent is undefined and raises a `MathJSONDomainError`.
 ```python
 ["Power", 2, 3]                   # 2^3=8
+["Power", 10, -3]                 # 10^-3=0.001
 ["Square", 4]                     # 4^2=16
 ```
 
 #### Root and square root
+`Root` also supports odd roots of negative numbers. Even or fractional roots of negative numbers (and `Sqrt` of a negative number) raise a `MathJSONDomainError`.
 ```python
 ["Root", 9, 2]                    # √9=3.0
 ["Root", 8, 3]                    # ∛8=2.0
+["Root", -8, 3]                   # ∛-8=-2.0
+["Root", -16, 4]                  # MathJSONDomainError
 ["Sqrt", 9]                       # √9=3.0
 ```
 
 #### Exponents and logarithms
+`Log` is the base-10 logarithm (as in CortexJS Compute Engine); use `Ln` for the natural logarithm. `Log` accepts an optional base as the second argument. Arguments outside the domain (`x <= 0`, base `<= 0` or base `== 1`) raise a `MathJSONDomainError`. `ExponentialE` evaluates to _e_ unless a parameter or constant with that name is defined.
 ```python
 ["Exp", 2]                        # e^2≅7.389
-["Log", 2.7183]                   # ln(2.7183)≅1.0000
+["Ln", 2.7183]                    # ln(2.7183)≅1.0000
+["Ln", "ExponentialE"]            # ln(e)=1.0
+["Log", 1000]                     # log10(1000)=3.0
+["Log", 8, 2]                     # log2(8)=3.0
 ["Log2", 8]                       # log2(8)=3.0
 ["Log10", 1000]                   # log10(1000)=3.0
 ```
+
+#### Out-of-range results
+Floating-point results that overflow to infinity raise a `MathJSONException` caused by an `OverflowError`; undefined (NaN) results raise one caused by a `MathJSONDomainError`.
 
 ### Conditionality
 
