@@ -682,6 +682,34 @@ def test_root_is_exact_when_cbrt_is_one_ulp_off(
     assert create_solver({})(expression) == expected_result
 
 
+@pytest.mark.parametrize(
+    "expression, pow_result, expected_result",
+    [
+        (["Root", 1e10, 10], 10.000000000000002, 10),
+        (["Root", -32, 5], 2.0000000000000004, -2),
+        (["Root", 33, 5], 2.0000000000000004, 2.0000000000000004),
+    ],
+)
+def test_root_is_exact_when_pow_is_one_ulp_off(
+    monkeypatch, expression, pow_result, expected_result
+):
+    monkeypatch.setattr(math, "pow", lambda x, y: pow_result)
+    assert create_solver({})(expression) == expected_result
+
+
+@pytest.mark.parametrize(
+    "value, inner_exception",
+    [
+        (float("nan"), MathJSONDomainError),
+        (float("inf"), OverflowError),
+    ],
+)
+def test_root_of_a_non_finite_value(value, inner_exception):
+    with pytest.raises(MathJSONException) as exc_info:
+        create_solver({"x": value})(["Root", "x", 3])
+    assert isinstance(exc_info.value.e, inner_exception)
+
+
 def test_domain_error_is_value_error():
     assert issubclass(MathJSONDomainError, ValueError)
 

@@ -550,9 +550,14 @@ def create_mathjson_solver(solver_parameters, strict=False):
 
             def positive_root(x, n, r):
                 y = math.cbrt(x) if n == 3 else domain_safe(math.pow, x, r)
-                # glibc's cbrt and pow(x, 1/n) can be one ulp off an exact root
-                # (cbrt(27) = 3.0000000000000004): give exact roots back exactly
-                if isinstance(n, (int, float)) and float(n).is_integer() and n > 0:
+                # cbrt and pow(x, 1/n) can be one ulp off an exact root:
+                # give exact roots back exactly
+                if (
+                    math.isfinite(y)
+                    and isinstance(n, (int, float))
+                    and float(n).is_integer()
+                    and n > 0
+                ):
                     k = round(y)
                     if k ** int(n) == x:
                         return float(k)
