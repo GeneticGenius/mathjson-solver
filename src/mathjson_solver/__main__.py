@@ -548,6 +548,16 @@ def create_mathjson_solver(solver_parameters, strict=False):
                     raise ZeroDivisionError("0 cannot be raised to a negative power")
                 return domain_safe(math.pow, x, y)
 
+            def positive_root(x, n, r):
+                y = math.cbrt(x) if n == 3 else domain_safe(math.pow, x, r)
+                # glibc's cbrt and pow(x, 1/n) can be one ulp off an exact root
+                # (cbrt(27) = 3.0000000000000004): give exact roots back exactly
+                if isinstance(n, (int, float)) and float(n).is_integer() and n > 0:
+                    k = round(y)
+                    if k ** int(n) == x:
+                        return float(k)
+                return y
+
             def Root(s):
                 x = f(s[1], c)
                 n = f(s[2], c)
@@ -563,12 +573,8 @@ def create_mathjson_solver(solver_parameters, strict=False):
                         raise MathJSONDomainError(
                             "Even or fractional root of a negative number"
                         )
-                    if n == 3:
-                        return -math.cbrt(-x)
-                    return -domain_safe(math.pow, -x, r)
-                if n == 3:
-                    return math.cbrt(x)
-                return domain_safe(math.pow, x, r)
+                    return -positive_root(-x, n, r)
+                return positive_root(x, n, r)
 
             def Log(s):
                 x = f(s[1], c)

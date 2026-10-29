@@ -1,5 +1,6 @@
 import sys
 import os
+import math
 import pytest
 import re
 
@@ -663,6 +664,22 @@ def test_raises_domain_and_overflow(expression, inner_exception):
     with pytest.raises(MathJSONException) as exc_info:
         solver(expression)
     assert isinstance(exc_info.value.e, inner_exception)
+
+
+@pytest.mark.parametrize(
+    "expression, expected_result",
+    [
+        (["Root", 27, 3], 3),
+        (["Root", -27, 3], -3),
+        (["Root", 26, 3], 3.0000000000000004),
+    ],
+)
+def test_root_is_exact_when_cbrt_is_one_ulp_off(
+    monkeypatch, expression, expected_result
+):
+    # glibc's cbrt, as on Linux, answers 3.0000000000000004 for 27
+    monkeypatch.setattr(math, "cbrt", lambda x: 3.0000000000000004)
+    assert create_solver({})(expression) == expected_result
 
 
 def test_domain_error_is_value_error():

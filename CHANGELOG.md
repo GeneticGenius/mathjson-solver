@@ -23,7 +23,7 @@ The Git tags of this fork (`1.10.0-x`) and the package version differ: tags `1.1
   - `Sqrt` of a negative number.
   - `Power` with a negative base and a non-integer exponent. (`Power(0, negative)` still raises `ZeroDivisionError`.)
   - `Root` of a negative number with an even or fractional index.
-- `Root` supports odd roots of negative numbers: `["Root", -8, 3]` is `-2` and `["Root", -32, 5]` is `-2`. `∛` uses `math.cbrt`, so `["Root", 27, 3]` is exactly `3.0`.
+- `Root` supports odd roots of negative numbers: `["Root", -8, 3]` is `-2` and `["Root", -32, 5]` is `-2`. `∛` uses `math.cbrt`, and an exact integer root is returned exactly on every platform: `["Root", 27, 3]` is `3.0`, although glibc's `cbrt(27)` is `3.0000000000000004`.
 - Overflow handling: `OverflowError` is converted to `MathJSONException`. A float result that is infinite raises `OverflowError`, and a NaN result raises `MathJSONDomainError`, e.g. `["Multiply", 1e300, 1e300]`, `["Power", 10, 400]`. The check applies to float results of any construct only; booleans, strings, lists and dates are unaffected.
 - `ExponentialE` evaluates to `math.e`. Parameters and `Constants` with the same name take precedence. `Pi` is intentionally not provided.
 - `create_solver(parameters, strict=False)`. With `strict=True`, an expression whose head is not a supported operator raises `MathJSONException` (caused by `NotImplementedError`) instead of being returned unchanged. The default behaviour is unchanged.
