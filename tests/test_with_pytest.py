@@ -1,5 +1,6 @@
 import sys
 import os
+import math
 import pytest
 import re
 
@@ -7,7 +8,12 @@ from datetime import datetime
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../src/"))
 
-from mathjson_solver import create_solver, MathJSONException, extract_variables
+from mathjson_solver import (
+    create_solver,
+    MathJSONException,
+    MathJSONDomainError,
+    extract_variables,
+)
 
 
 @pytest.mark.parametrize(
@@ -37,8 +43,8 @@ from mathjson_solver import create_solver, MathJSONException, extract_variables
         ({}, ["Square", 4], 16),
         ({}, ["Round", ["Exp", 2], 3], 7.389),
         ({}, ["Divide", 10, ["Add", 2, 3]], 2),
-        ({}, ["Round", ["Log", 2.7183], 3], 1.0),
         ({}, ["Round", ["Ln", 2.7183], 3], 1.0),
+        ({}, ["Round", ["Log", 1000], 3], 3.0),
         ({}, ["Round", ["Ln", 2.7183, 12], 3], 1.0),
         ({}, ["Log2", 8], 3),
         ({}, ["Log10", 1000], 3),
@@ -604,6 +610,135 @@ def test_solver_comparison(parameters, expression, expected_result):
 def test_solver_simple(parameters, expression, expected_result):
     solver = create_solver(parameters)
     assert solver(expression) == expected_result
+
+
+@pytest.mark.parametrize(
+    "parameters, expression, expected_result",
+    [
+        ({}, ["Log", 100], pytest.approx(2)),
+        ({}, ["Log", 1], pytest.approx(0)),
+        ({}, ["Log", 0.001], pytest.approx(-3)),
+        ({}, ["Log", 8, 2], pytest.approx(3)),
+        ({}, ["Ln", "ExponentialE"], pytest.approx(1)),
+        ({"ExponentialE": 10}, ["Add", "ExponentialE", 1], 11),
+        ({}, ["Constants", ["ExponentialE", 3], "ExponentialE"], 3),
+        ({}, ["Power", 10, 2], 100),
+        ({}, ["Power", 10, 0], 1),
+        ({}, ["Power", 10, -3], pytest.approx(0.001)),
+        ({}, ["Power", -2, 3], -8),
+        ({}, ["Root", 27, 3], 3),
+        ({}, ["Root", -8, 3], -2),
+        ({}, ["Root", -27, 3], -3),
+        ({}, ["Root", -32, 5], -2),
+        ({}, ["Root", -8, 3.0], -2),
+    ],
+)
+def test_solver_log_power_root(parameters, expression, expected_result):
+    solver = create_solver(parameters)
+    assert solver(expression) == expected_result
+
+
+@pytest.mark.parametrize(
+    "expression, inner_exception",
+    [
+        (["Log", 0], MathJSONDomainError),
+        (["Log", -5], MathJSONDomainError),
+        (["Log", 8, 1], MathJSONDomainError),
+        (["Log", 8, 0], MathJSONDomainError),
+        (["Log", 8, -2], MathJSONDomainError),
+        (["Ln", 0], MathJSONDomainError),
+        (["Log2", -1], MathJSONDomainError),
+        (["Log10", 0], MathJSONDomainError),
+        (["Sqrt", -4], MathJSONDomainError),
+        (["Root", -16, 4], MathJSONDomainError),
+        (["Root", -8, 2.5], MathJSONDomainError),
+        (["Power", -8, 0.333], MathJSONDomainError),
+        (["Power", 10, 400], OverflowError),
+        (["Power", 0, -1], ZeroDivisionError),
+        (["Multiply", 1e300, 1e300], OverflowError),
+        (["Exp", 1000], OverflowError),
+    ],
+)
+def test_raises_domain_and_overflow(expression, inner_exception):
+    solver = create_solver({})
+    with pytest.raises(MathJSONException) as exc_info:
+        solver(expression)
+    assert isinstance(exc_info.value.e, inner_exception)
+
+
+@pytest.mark.parametrize(
+    "expression, expected_result",
+    [
+        (["Root", 27, 3], 3),
+        (["Root", -27, 3], -3),
+        (["Root", 26, 3], 3.0000000000000004),
+    ],
+)
+def test_root_is_exact_when_cbrt_is_one_ulp_off(
+    monkeypatch, expression, expected_result
+):
+    # glibc's cbrt, as on Linux, answers 3.0000000000000004 for 27
+    monkeypatch.setattr(math, "cbrt", lambda x: 3.0000000000000004)
+    assert create_solver({})(expression) == expected_result
+
+
+@pytest.mark.parametrize(
+    "expression, pow_result, expected_result",
+    [
+        (["Root", 1e10, 10], 10.000000000000002, 10),
+        (["Root", -32, 5], 2.0000000000000004, -2),
+        (["Root", 33, 5], 2.0000000000000004, 2.0000000000000004),
+    ],
+)
+def test_root_is_exact_when_pow_is_one_ulp_off(
+    monkeypatch, expression, pow_result, expected_result
+):
+    monkeypatch.setattr(math, "pow", lambda x, y: pow_result)
+    assert create_solver({})(expression) == expected_result
+
+
+@pytest.mark.parametrize(
+    "value, inner_exception",
+    [
+        (float("nan"), MathJSONDomainError),
+        (float("inf"), OverflowError),
+    ],
+)
+def test_root_of_a_non_finite_value(value, inner_exception):
+    with pytest.raises(MathJSONException) as exc_info:
+        create_solver({"x": value})(["Root", "x", 3])
+    assert isinstance(exc_info.value.e, inner_exception)
+
+
+def test_domain_error_is_value_error():
+    assert issubclass(MathJSONDomainError, ValueError)
+
+
+def test_unknown_head_strict():
+    assert create_solver({})(["Sin", 1]) == ["Sin", 1]
+    assert create_solver({}, strict=False)(["Sin", 1]) == ["Sin", 1]
+    solver = create_solver({}, strict=True)
+    with pytest.raises(MathJSONException) as exc_info:
+        solver(["Sin", 1])
+    assert isinstance(exc_info.value.e, NotImplementedError)
+    assert exc_info.value.construct == "Sin"
+    with pytest.raises(MathJSONException):
+        solver(["Add", 1, ["Sin", 1]])
+
+
+def test_known_heads_in_strict_mode():
+    solver = create_solver({"a": ["Array", 1, 2, 3]}, strict=True)
+    assert solver(["Map", ["Array", 1, 2, 3], ["Square"]]) == [
+        "Array",
+        1,
+        4,
+        9,
+    ]
+    assert solver(["StrictMap", "a", ["Power"], 2]) == ["Array", 1, 4, 9]
+    assert solver(["Filter", "a", ["Greater"], 1]) == ["Array", 2, 3]
+    assert solver(["Sum", "a"]) == 6
+    assert solver(["Max", "a"]) == 3
+    assert solver(["Round", ["Log", 1000], 3]) == 3.0
 
 
 def test_raises_divide():

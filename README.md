@@ -43,6 +43,10 @@ except MathJSONException:
 
 Left unhandled, the exception will look like `MathJSONException("Problem in Divide. ['Divide', 1, 0]. division by zero")`.
 
+The original error is available as `e.e`. Arguments outside an operator's domain (e.g. `["Log", 0]`, `["Sqrt", -4]`) give a `MathJSONDomainError` (a `ValueError` subclass) and overflowing results give an `OverflowError`.
+
+By default, expressions with an unknown operator are returned unchanged. Use `create_solver(parameters, strict=True)` to raise a `MathJSONException` (caused by `NotImplementedError`) instead.
+
 
 ## How to run tests
 Make sure you have `pytest` installed. Then `cd` into project directory and run:
