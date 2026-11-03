@@ -7,7 +7,12 @@ from datetime import datetime
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../src/"))
 
-from mathjson_solver import create_solver, MathJSONException, extract_variables
+from mathjson_solver import (
+    create_solver,
+    MathJSONException,
+    MathJSONUnresolvedParameter,
+    extract_variables,
+)
 
 
 @pytest.mark.parametrize(
@@ -646,6 +651,9 @@ def test_handle_exception():
         ({"a": 5}, ["Sum", 2, "a", 3], set()),
         ({"a": 5, "b": 6}, ["Sum", 2, "a", "c"], set(["c"])),
         ({}, ["Constants", ["c", 1], ["d", ["Add", 2, "a"]], "d"], set(["a"])),
+        ({}, ["Constants", ["x", 5], ["Add", "x", "y"]], set(["y"])),
+        ({}, ["Equal", "a", ["Str", "NEEDS_REVIEW"]], set(["a"])),
+        ({}, ["Less", "a", ["Date", "2026-01-01"]], set(["a"])),
         # Now with "ugly" variables that mimic the ones used for deep referencing.
         (
             {},
@@ -680,5 +688,88 @@ def test_extract_variables(parameters, expression, expected_result):
         extract_variables(
             expression, set(), set([x for x in parameters.keys()])
         )
+        == expected_result
+    )
+
+
+@pytest.mark.parametrize(
+    "parameters, expression, expected_result",
+    [
+        ({"a": 3000}, ["Add", "a", "b"], 3000.0),
+        ({}, ["Add", "a", "b"], "ab"),
+        ({"a": 1, "b": None}, ["Add", "a", "b"], 1.0),
+        ({}, ["Greater", "a", 0.6], False),
+        ({"a": None}, ["Greater", "a", 0.6], False),
+        ({"color": "green"}, ["Switch", "undefined", 0, ["blue", 10]], 0),
+        ({}, "a", "a"),
+    ],
+)
+def test_unresolved_parameter_is_permissive_by_default(
+    parameters, expression, expected_result
+):
+    assert create_solver(parameters)(expression) == expected_result
+
+
+@pytest.mark.parametrize(
+    "parameters, expression, construct, message",
+    [
+        ({"a": 3000}, ["Add", "a", "b"], "Add", "Parameter 'b' is not defined"),
+        ({"a": 1, "b": None}, ["Add", "a", "b"], "Add", "Parameter 'b' is None"),
+        ({}, ["Greater", "a", 0.6], "Greater", "Parameter 'a' is not defined"),
+        ({"a": None}, ["Less", "a", 0.6], "Less", "Parameter 'a' is None"),
+        ({"a": 2}, ["Multiply", "a", "b"], "Multiply", "Parameter 'b' is not defined"),
+        (
+            {"a": 0.7},
+            ["All", ["Array", ["Greater", "a", 0.6], ["Less", "b", 1]]],
+            "Less",
+            "Parameter 'b' is not defined",
+        ),
+        ({}, "a", "Parameter", "Parameter 'a' is not defined"),
+    ],
+)
+def test_unresolved_parameter_raises_in_strict_mode(
+    parameters, expression, construct, message
+):
+    with pytest.raises(MathJSONException) as exc_info:
+        create_solver(parameters, strict=True)(expression)
+    exception = exc_info.value
+    assert isinstance(exception.e, MathJSONUnresolvedParameter)
+    assert str(exception.e) == message
+    assert exception.construct == construct
+
+
+def test_unresolved_parameter_reports_innermost_expression():
+    with pytest.raises(MathJSONException) as exc_info:
+        create_solver({"a": 0.7}, strict=True)(
+            ["Add", 1, ["Multiply", "a", "b"]]
+        )
+    assert exc_info.value.expr == ["Multiply", "a", "b"]
+
+
+@pytest.mark.parametrize(
+    "parameters, expression, expected_result",
+    [
+        ({"a": 0.7}, ["Greater", "a", 0.6], True),
+        ({"a": 0}, ["Add", "a", 1], 1.0),
+        ({"a": False}, ["Not", "a"], True),
+        ({"matrix": "plasma"}, ["Equal", "matrix", ["Str", "plasma"]], True),
+        ({"plasma": 1}, ["Str", "plasma"], "plasma"),
+        ({}, ["Constants", ["x", 5], ["Add", "x", 1]], 6.0),
+        ({}, ["Constants", ["x", 0], ["Not", "x"]], True),
+        ({}, ["Date", "2026-01-01"], datetime(2026, 1, 1)),
+    ],
+)
+def test_strict_mode_resolved_expressions(parameters, expression, expected_result):
+    assert create_solver(parameters, strict=True)(expression) == expected_result
+
+
+@pytest.mark.parametrize(
+    "parameters, expected_result",
+    [({"a": 0.7}, True), ({"a": None}, True), ({}, False)],
+)
+def test_is_defined(parameters, expected_result):
+    assert create_solver(parameters)(["IsDefined", "a"]) == expected_result
+    assert (
+        create_solver(parameters, strict=True)(["IsDefined", "a"])
         == expected_result
     )
