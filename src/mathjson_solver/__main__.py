@@ -29,6 +29,13 @@ class MathJSONException(Exception):
         return f"Problem in {self.construct}. {self.expr}. {m}"
 
 
+class MathJSONUnresolvedParameter(KeyError):
+    """A parameter is not defined, or is None, in strict mode"""
+
+    def __str__(self):
+        return str(self.args[0])
+
+
 def is_numeric(x):
     try:
         float(x)
@@ -149,7 +156,17 @@ def has_sublist2(
         return count >= required_match_count
 
 
-def create_mathjson_solver(solver_parameters):
+def create_mathjson_solver(solver_parameters, strict=False):
+    def resolved(name, value):
+        if strict and value is None:
+            raise MathJSONUnresolvedParameter(f"Parameter '{name}' is None")
+        return value
+
+    def resolve_value(value, c):
+        if strict and isinstance(value, str):
+            return value
+        return f(value, c)
+
     def f(s, *args):
         if args:
             c = deepcopy(args[0])
@@ -389,7 +406,9 @@ def create_mathjson_solver(solver_parameters):
             def Str(s):
                 if len(s) < 2:
                     raise ValueError("Wrong parameters for 'Str'")
-                return f"{f(s[1])}"
+                if strict and isinstance(s[1], str):
+                    return s[1]
+                return f"{f(s[1], c)}"
 
             def Date(s):
                 if len(s) < 2:
@@ -397,7 +416,10 @@ def create_mathjson_solver(solver_parameters):
                 return datetime.fromisoformat(s[1])
 
             def Not(s):
-                return not f(s[1])
+                return not f(s[1], c)
+
+            def IsDefined(s):
+                return s[1] in solver_parameters or s[1] in c
 
             def Map(s):
                 """
@@ -588,6 +610,7 @@ def create_mathjson_solver(solver_parameters):
                 "Str": Str,
                 "Date": Date,
                 "Not": Not,
+                "IsDefined": IsDefined,
                 "Map": Map,
                 "StrictMap": StrictMap,
                 "Filter": Filter,
@@ -616,23 +639,33 @@ def create_mathjson_solver(solver_parameters):
                     raise MathJSONException(e, s, mathjson_construct=s[0])
                 except ZeroDivisionError as e:
                     raise MathJSONException(e, s, mathjson_construct=s[0])
+                except MathJSONUnresolvedParameter as e:
+                    raise MathJSONException(e, s, mathjson_construct=s[0])
             else:
                 # raise MathJSONException(
                 #     NotImplementedError(f"'{s[0]}' is not supported"), s
                 # )
                 return s
         elif s in solver_parameters:
+            value = resolved(s, solver_parameters[s])
             try:
-                return f(solver_parameters[s], c)
+                return resolve_value(value, c)
             except RecursionError:
-                return solver_parameters[s]
+                return value
         elif s in c:
-            return f(c[s], c)
+            return resolve_value(resolved(s, c[s]), c)
         else:
-            # raise KeyError(f"Parameter '{s}' is not defined")
+            if strict and isinstance(s, str):
+                raise MathJSONUnresolvedParameter(f"Parameter '{s}' is not defined")
             return s
 
-    return f
+    def solver(s, *args):
+        try:
+            return f(s, *args)
+        except MathJSONUnresolvedParameter as e:
+            raise MathJSONException(e, s, mathjson_construct="Parameter")
+
+    return solver
 
 
 def extract_variables(
@@ -708,7 +741,9 @@ def extract_variables(
             for x in s[1:-1]:
                 ignore_list.add(x[0])
                 li.update(extract_variables(x[1], li, ignore_list))
-            li.update(extract_variables(x[-1], li, ignore_list))
+            li.update(extract_variables(s[-1], li, ignore_list))
+        elif s[0] in ("Str", "Date"):
+            return li
         elif s[0] == "If":
             for elif_block in s[1:-1]:  # s[1] is list
                 for x in elif_block:

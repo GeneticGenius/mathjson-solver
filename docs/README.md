@@ -205,6 +205,8 @@ Despite these differences, there are many cases where both `Equal` and `StrictEq
 
 _MathJSON Solver_ supports static arrays and arrays given as parameters. Arrays can contain any number of elements, including other arrays. Arrays can be used in `Max`, `Min`, `Average`, `Median`, `Length`, `Any`, `All`, `In`, `ContainsAnyOf`, `ContainsAllOf`, `ContainsNoneOf`, `NotIn`.
 
+`Any` and `All` take a single operand, an array: `["All", ["Array", cond_a, cond_b]]`. Written as `["All", cond_a, cond_b]`, only the operands of `cond_a` are checked and `cond_b` is ignored.
+
 A static array is defined as `["Array", 1, 2, 3]` and when evaluated, results to the same `["Array", 1, 2, 3]`.
 
 An array can also be given as a parameter. In this case, the array is defined in the parameters dictionary and referred to by its name. For example, `parameters = {"a": ["Array", 1, 2, 3]}` and then the expression `["Max", "a"]` will result in 3.
