@@ -43,6 +43,13 @@ except MathJSONException:
 
 Left unhandled, the exception will look like `MathJSONException("Problem in Divide. ['Divide', 1, 0]. division by zero")`.
 
+The original error is the exception's `e`. A calculation that cannot be done gives one of these errors:
+* `MathJSONDomainError` (a `ValueError`): an argument is outside the domain of the operator, e.g. `["Log10", 0]`, `["Sqrt", -4]`;
+* `MathJSONOverflowError` (an `OverflowError`): finite numbers give a result too large for a float, e.g. `["Power", 10, 400]`;
+* `MathJSONUnderflowError` (an `ArithmeticError`): `Power`, `Square` or `Exp` of finite numbers gives a non-zero result too small for a float, e.g. `["Exp", -1000]`.
+
+Infinite and NaN values given as parameters raise neither an overflow nor an underflow: `inf * 100` is `inf`. Converting an infinite value to an integer (`Round`, `Int`) raises a `MathJSONOverflowError`.
+
 
 ## Strict mode
 
@@ -62,7 +69,8 @@ In strict mode:
 * a parameter whose value is `None` is unresolved too;
 * string values of parameters are returned as is, not resolved again as names;
 * string literals must be written with `Str`: `["Str", "plasma"]` returns `"plasma"` without looking it up. Bare strings anywhere else (`Switch` cases, `In` arrays, `Strptime` formats, ...) are parameter names;
-* `If`, `Map` and `HasMatchingSublist` still catch a `MathJSONException` raised by a branch or an element, as they do in the default mode.
+* a formula whose operator is unknown raises a `MathJSONException` caused by `MathJSONUnsupportedOperator` (a `NotImplementedError`), instead of being returned unchanged. A list given as a parameter value is data, and is returned as is;
+* `If` and `Map` still catch a `MathJSONException` raised by a branch or an element, as they do in the default mode, except the calculation errors above, which they let through in both modes.
 
 
 ## How to run tests

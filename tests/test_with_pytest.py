@@ -1,5 +1,6 @@
 import sys
 import os
+import math
 import pytest
 import re
 
@@ -9,8 +10,12 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../src/"))
 
 from mathjson_solver import (
     create_solver,
+    MathJSONDomainError,
     MathJSONException,
+    MathJSONOverflowError,
+    MathJSONUnderflowError,
     MathJSONUnresolvedParameter,
+    MathJSONUnsupportedOperator,
     extract_variables,
 )
 
@@ -773,3 +778,260 @@ def test_is_defined(parameters, expected_result):
         create_solver(parameters, strict=True)(["IsDefined", "a"])
         == expected_result
     )
+
+
+@pytest.mark.parametrize(
+    "expression, expected_result",
+    [
+        (["LogBase", 8, 2], 3.0),
+        (["LogBase", 1000, 10], 3.0),
+        (["LogBase", 100, 10], 2.0),
+        (["LogBase", 0.001, 10], -3.0),
+        (["LogBase", 81, 3], pytest.approx(4.0)),
+        # Log is the natural logarithm, whatever the base
+        (["Log", 100], math.log(100)),
+        (["Log", 100, 10], math.log(100)),
+        # The base of Log is not even evaluated
+        (["Log", 100, "undefined"], math.log(100)),
+        (["LogBase", 8, 0.5], pytest.approx(-3.0)),
+        (["Log10", 1000], 3.0),
+        (["Abs", -3.5], 3.5),
+        (["Abs", 0], 0),
+        (["Exp", 1], math.e),
+        (["Ln", ["Exp", 1]], 1.0),
+        (["Exp", 0], 1.0),
+        (["Ln", ["Exp", 2]], 2.0),
+        (["Root", -8, 3], -2.0),
+        (["Root", -32, 5], -2.0),
+        (["Root", -8, -3], -0.5),
+        (["Root", -8, 3.0], -2.0),
+        (["Power", 10, 2], 100),
+        (["Power", 10, 0], 1),
+        (["Power", 10, -3], 0.001),
+        (["GreaterEqual", ["Log10", 1000], 3], True),
+    ],
+)
+def test_calculator_operations(expression, expected_result):
+    assert create_solver({}, strict=True)(expression) == expected_result
+
+
+def test_integer_power_stays_an_integer():
+    result = create_solver({}, strict=True)(["Power", 2, 3])
+    assert result == 8 and isinstance(result, int)
+    assert create_solver({}, strict=True)(["Square", 3]) == 9
+    assert (
+        create_solver({}, strict=True)(
+            ["Switch", ["Power", 2, 3], ["Str", "other"], [8, ["Str", "eight"]]]
+        )
+        == "eight"
+    )
+
+
+@pytest.mark.parametrize(
+    "parameters, expression",
+    [
+        ({}, ["Log10", 0]),
+        ({}, ["Log10", -5]),
+        ({}, ["Ln", 0]),
+        ({}, ["Log", -1]),
+        ({}, ["Log2", 0]),
+        ({}, ["LogBase", 10, 1]),
+        ({}, ["LogBase", 10, 0]),
+        ({}, ["LogBase", 10, -2]),
+        ({}, ["LogBase", 0, 10]),
+        ({}, ["LogBase", -8, 2]),
+        ({}, ["Sqrt", -4]),
+        ({}, ["Root", -16, 4]),
+        ({}, ["Root", -8, 2.5]),
+        ({}, ["Power", -8, 0.5]),
+        ({"u": -math.inf}, ["Sqrt", "u"]),
+        ({"u": -math.inf}, ["Root", "u", 2]),
+        ({"x": 0}, ["Divide", 1, ["Log10", "x"]]),
+    ],
+)
+def test_domain_error(parameters, expression):
+    with pytest.raises(MathJSONException) as exc_info:
+        create_solver(parameters, strict=True)(expression)
+    assert isinstance(exc_info.value.e, MathJSONDomainError)
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        ["Power", 10, 400],
+        ["Power", 10, 10**9],
+        ["Power", 10.0, 400],
+        ["Exp", 1000],
+        ["Multiply", 1e300, 1e300],
+        ["Add", 1e308, 1e308],
+        ["Subtract", -1e308, 1e308],
+        ["Divide", 1e308, 1e-10],
+        ["Average", ["Array", 1e308, 1e308]],
+        ["Median", ["Array", 1e308, 1e308]],
+        ["Root", 10, 0.001],
+        ["Less", ["Multiply", 1e300, 1e300], 1],
+    ],
+)
+def test_overflow_error(expression):
+    with pytest.raises(MathJSONException) as exc_info:
+        create_solver({}, strict=True)(expression)
+    assert isinstance(exc_info.value.e, MathJSONOverflowError)
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [["Power", 10, -400], ["Power", 0.5, 2000], ["Exp", -1000]],
+)
+def test_underflow_error(expression):
+    with pytest.raises(MathJSONException) as exc_info:
+        create_solver({}, strict=True)(expression)
+    assert isinstance(exc_info.value.e, MathJSONUnderflowError)
+
+
+@pytest.mark.parametrize(
+    "parameters, expression, expected_result",
+    [
+        # Crystal Miner gives an infinite relative uncertainty without positives
+        ({"u": math.inf}, ["Less", ["Multiply", "u", 100], 50], False),
+        ({"u": math.inf}, ["Multiply", "u", 100], math.inf),
+        ({"u": math.inf}, ["Add", "u", 1], math.inf),
+        ({"u": math.inf}, ["Divide", "u", 2], math.inf),
+        ({"u": math.inf}, ["Power", "u", 2], math.inf),
+        ({"u": -math.inf}, ["Exp", "u"], 0.0),
+        ({"u": math.inf}, ["Power", "u", -1], 0.0),
+        ({"u": 0}, ["Power", "u", 2], 0),
+        ({"u": "inf"}, ["Multiply", "u", 2], math.inf),
+        ({"u": -math.inf}, ["Root", "u", 3], -math.inf),
+        ({"u": 2}, ["LogBase", 8, ["Multiply", "u", math.inf]], 0.0),
+        # An integer too large for a float stays an exact integer
+        ({}, ["Subtract", 10**400, 1], 10**400 - 1),
+    ],
+)
+def test_non_finite_data_go_through(parameters, expression, expected_result):
+    assert create_solver(parameters, strict=True)(expression) == expected_result
+
+
+def test_nan_data_go_through():
+    result = create_solver({"u": math.nan}, strict=True)(["Multiply", "u", 2])
+    assert math.isnan(result)
+
+
+@pytest.mark.parametrize("expression", [["Floor", 2.5], ["Sin", "x"]])
+def test_unsupported_operator_raises_in_strict_mode(expression):
+    with pytest.raises(MathJSONException) as exc_info:
+        create_solver({"x": 1}, strict=True)(expression)
+    assert isinstance(exc_info.value.e, MathJSONUnsupportedOperator)
+    # The default mode still returns it unchanged
+    assert create_solver({"x": 1})(expression) == expression
+
+
+@pytest.mark.parametrize(
+    "parameters, expression, expected_result",
+    [
+        ({"l": ["Array", "plasma", "serum"]}, ["In", ["Str", "plasma"], "l"], True),
+        ({"l": ["plasma", "serum"]}, ["In", ["Str", "plasma"], "l"], True),
+        ({"l": ["A1", "B2"]}, "l", ["A1", "B2"]),
+        (
+            {"rows": ["Array", ["plasma", 1]]},
+            ["Map", "rows", ["Str"]],
+            ["Array", "['plasma', 1]"],
+        ),
+        (
+            {"rows": ["plasma", "serum"]},
+            ["Constants", ["l", "rows"], ["In", ["Str", "plasma"], "l"]],
+            True,
+        ),
+        (
+            {"rows": ["Array", ["plasma", 1]]},
+            ["Constants", ["r", "rows"], ["Map", "r", ["Str"]]],
+            ["Array", "['plasma', 1]"],
+        ),
+        (
+            {"rows": ["Array", ["plasma", 1]]},
+            ["Constants", ["r", "rows"], ["Map", "r", ["Abs"]]],
+            ["Array", ["plasma", 1]],
+        ),
+    ],
+)
+def test_list_parameters_are_data_in_strict_mode(
+    parameters, expression, expected_result
+):
+    assert create_solver(parameters, strict=True)(expression) == expected_result
+
+
+@pytest.mark.parametrize(
+    "parameters, expression, error",
+    [
+        (
+            {"x": 0},
+            ["If", [["Greater", ["Log10", "x"], 1], 1], 2],
+            MathJSONDomainError,
+        ),
+        ({"x": 0}, ["If", [True, ["Log10", "x"]], 2], MathJSONDomainError),
+        ({}, ["If", [True, ["Power", 10, 400]], 2], MathJSONOverflowError),
+        ({}, ["If", [["Floor", 1], 1], 2], MathJSONUnsupportedOperator),
+        ({}, ["Map", ["Array", 1, 0], ["Log10"]], MathJSONDomainError),
+        ({}, ["Map", ["Array", 1, -1000], ["Exp"]], MathJSONUnderflowError),
+        ({}, ["Map", ["Array", 1, 1000], ["Exp"]], MathJSONOverflowError),
+        ({}, ["Map", ["Array", 1], ["Floor"]], MathJSONUnsupportedOperator),
+        ({}, ["If", [True, ["Exp", -1000]], 2], MathJSONUnderflowError),
+    ],
+)
+def test_if_and_map_let_calculation_errors_through(
+    parameters, expression, error
+):
+    with pytest.raises(MathJSONException) as exc_info:
+        create_solver(parameters, strict=True)(expression)
+    assert isinstance(exc_info.value.e, error)
+
+
+@pytest.mark.parametrize(
+    "parameters, expression",
+    [
+        ({"x": 0}, ["If", [["Greater", ["Log10", "x"], 1], 1], 2]),
+        ({}, ["Map", ["Array", 1, 0], ["Log10"]]),
+    ],
+)
+def test_if_and_map_let_calculation_errors_through_by_default(
+    parameters, expression
+):
+    with pytest.raises(MathJSONException) as exc_info:
+        create_solver(parameters)(expression)
+    assert isinstance(exc_info.value.e, MathJSONDomainError)
+
+
+@pytest.mark.parametrize(
+    "parameters, expression, expected_result",
+    [
+        ({}, ["If", [["Greater", "missing", 1], 1], 2], 2),
+        ({}, ["If", [True, ["Root", 8, 0]], 2], 2),
+        ({}, ["Map", ["Array", 1, 2], ["Divide", 0]], ["Array", 1, 2]),
+    ],
+)
+def test_if_and_map_still_catch_other_errors(
+    parameters, expression, expected_result
+):
+    assert create_solver(parameters, strict=True)(expression) == expected_result
+
+
+def test_extract_variables_knows_log_base():
+    assert extract_variables(["LogBase", "x", 2], set(), set()) == {"x"}
+
+
+def test_list_in_the_given_context_is_data_in_strict_mode():
+    assert (
+        create_solver({}, strict=True)(
+            ["In", ["Str", "plasma"], "l"], {"l": ["plasma", "serum"]}
+        )
+        is True
+    )
+
+
+def test_nested_list_in_the_given_context_is_data_in_strict_mode():
+    solver = create_solver({}, strict=True)
+    context = {"r": ["Array", ["plasma", 1]]}
+    assert solver(["Map", "r", ["Str"]], context) == ["Array", "['plasma', 1]"]
+    # The context's lists are data for that call only
+    with pytest.raises(MathJSONException) as exc_info:
+        solver(["Constants", ["x", context["r"][1]], "x"])
+    assert isinstance(exc_info.value.e, MathJSONUnsupportedOperator)

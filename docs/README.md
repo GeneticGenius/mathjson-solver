@@ -19,6 +19,7 @@
 * [Log](#exponents-and-logarithms)
 * [Log2](#exponents-and-logarithms)
 * [Log10](#exponents-and-logarithms)
+* [LogBase](#exponents-and-logarithms)
 * [Equal](#equality-greater-than-less-than)
 * [StrictEqual](#equality-greater-than-less-than)
 * [NotEqual](#equality-greater-than-less-than)
@@ -139,25 +140,31 @@ Performs a division.
 ```
 
 #### Square and Power
-`Power` raises a number to given power. `Square` is a special case of `Power`.
+`Power` raises a number to given power. `Square` is a special case of `Power`. A negative number with a non-integer exponent raises a `MathJSONDomainError`, a result too large for a float a `MathJSONOverflowError`, and a non-zero result too small for a float a `MathJSONUnderflowError`.
 ```python
 ["Power", 2, 3]                   # 2^3=8
+["Power", 10, -3]                 # 10^-3=0.001
 ["Square", 4]                     # 4^2=16
 ```
 
 #### Root and square root
+An odd root of a negative number is real. Any other root of a negative number, whose exponent `1/n` is not an integer, raises a `MathJSONDomainError`.
 ```python
 ["Root", 9, 2]                    # √9=3.0
 ["Root", 8, 3]                    # ∛8=2.0
+["Root", -8, 3]                   # ∛-8=-2.0
 ["Sqrt", 9]                       # √9=3.0
 ```
 
 #### Exponents and logarithms
+`Log` is the natural logarithm, like `Ln`, and ignores a second argument: use `LogBase` for another base. The logarithm of a number `<= 0`, or in a base `<= 0` or equal to 1, raises a `MathJSONDomainError`.
 ```python
 ["Exp", 2]                        # e^2≅7.389
 ["Log", 2.7183]                   # ln(2.7183)≅1.0000
+["Ln", 2.7183]                    # ln(2.7183)≅1.0000
 ["Log2", 8]                       # log2(8)=3.0
 ["Log10", 1000]                   # log10(1000)=3.0
+["LogBase", 8, 2]                 # log2(8)=3.0
 ```
 
 ### Conditionality
